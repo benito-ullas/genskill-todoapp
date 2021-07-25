@@ -1,12 +1,33 @@
-from flask import Blueprint, g, request, render_template, jsonify
+from flask import Blueprint, g, request, render_template, jsonify, current_app
 from . import db
 import jwt
 import psycopg2
 import uuid
-from werkzeug.security import generate_password_hash, check_password_hash 
+from werkzeug.security import generate_password_hash
+from functools import wraps
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
+def token_required(f): 
+        @wraps(f)
+        def decorated(*args,**kwargs):
+                token = None
+                
+                if 'x-access-token' in request.headers:
+                        token = request.headers['x-access-token']
+                if not token:
+                        return jsonify({"message":"Token is missing"}),401
+                        
+                try:
+                        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+                        current_user = data['public id']                      
+                                              
+                except:
+                        return jsonify({"message": "token is invalid"}),401
+                return f(current_user,*args,**kwargs)
+       
+        return decorated
+                        
 @bp.route('/user', methods = ["POST"])
 def create_user():
         data = request.get_json()
@@ -24,16 +45,20 @@ def create_user():
         return jsonify({"message": f"new user {data['username']} added"})
         
 @bp.route('/user', methods = ['GET'])
-def get_all_users():
+@token_required
+def get_all_users(current_user):
         conn = db.get_db()
         cur = conn.cursor()
+        cur.execute("select admin from users where public_id = (%s);",(current_user,))
+        is_admin = cur.fetchone()
         cur.execute("select * from users order by id;")
         data = cur.fetchall()
         cur.close()
         conn.close()
-        
-        
-        
+       
+        if not is_admin[0]:
+                return jsonify({'message':'cannot perform this task'}) 
+
         if data == []:
                 output = {"message": "no users available"}
                 return jsonify(output)
@@ -44,22 +69,24 @@ def get_all_users():
         return jsonify({"users": output})
                 
 @bp.route('/user/<public_id>', methods = ['GET'])
-def get_one_user(public_id):
+@token_required
+def get_one_user(current_user,public_id):
         conn = db.get_db()
         cur = conn.cursor()
+        cur.execute("select * from users where public_id = (%s);",(current_user,))
+        data = cur.fetchone()
         cur.execute("select id from users where public_id = (%s);",(public_id,))
         id = cur.fetchone()
+        
+        if data[4] == 0 and data[1] != public_id:
+                return jsonify({'message':'cannot view this page'}) 
         
         if id == None:
                 output = {"message":"no such user! Enter valid id"}
         else:
                 cur.execute("select * from users where id = (%s);",(id,))
                 data = cur.fetchone()
-                if data == None:
-                        output = {"message": "user doesnt exist"}
-                
-                else:
-                        output = {"public_id": data[1], "username": data[2], "password": data[3], "admin": data[4] }
+                output = {"public_id": data[1], "username": data[2], "password": data[3], "admin": data[4] }
                 
         cur.close()
         conn.close()
@@ -68,11 +95,17 @@ def get_one_user(public_id):
         return jsonify(output)
         
 @bp.route('/user/<public_id>', methods = ['PUT'])
-def make_admin(public_id):
+@token_required
+def make_admin(current_user,public_id):
         conn = db.get_db()
         cur = conn.cursor()
+        cur.execute("select * from users where public_id = (%s);",(current_user,))
+        data = cur.fetchone()
         cur.execute("select id from users where public_id = (%s);",(public_id,))
         id = cur.fetchone()
+        
+        if data[4] == 0:
+                return jsonify({'message':'cannot perform this task'}) 
         
         if id == None:
                 output = {"message":"no such user! Enter valid id"}
@@ -86,16 +119,22 @@ def make_admin(public_id):
         return jsonify(output)
         
 @bp.route('/user/<public_id>', methods = ['DELETE'])
-def delete_user(public_id):
+@token_required
+def delete_user(current_user,public_id):
         conn = db.get_db()
         cur = conn.cursor()
+        cur.execute("select * from users where public_id = (%s);",(current_user,))
+        data = cur.fetchone()
         cur.execute("select id from users where public_id = (%s);",(public_id,))
         uid = cur.fetchone()
+        
+        if data[4] == 0 and data[1] != public_id:
+                return jsonify({'message':'cannot perform this task'}) 
         
         if uid == None:
                 output = {"message":"no such user! Enter valid id"}
         else:
-                cur.execute("delete from users where public_id = (%s);",(uid,))
+                cur.execute("delete from users where id = (%s);",(uid,))
                 conn.commit()
                 output = {"message": "user has been deleted"}
         cur.close()

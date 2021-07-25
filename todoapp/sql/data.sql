@@ -16,11 +16,11 @@ completed integer DEFAULT 0,
 user_id integer REFERENCES users(id)
 );
 
-INSERT INTO DATA (list) VALUES
-('clean dishes'),
-('sweep the floor'),
-('get groceries'),
-('pickup kids from school') 
+INSERT INTO DATA (list, user_id) VALUES
+('clean dishes',1),
+('sweep the floor',1),
+('get groceries',3),
+('pickup kids from school',3) 
 ;
 
 
