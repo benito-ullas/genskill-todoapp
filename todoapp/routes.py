@@ -5,9 +5,10 @@ from werkzeug.security import check_password_hash
 import jwt
 import datetime
 from functools import wraps
-
+from flask_cors import CORS
 
 bp = Blueprint('todo', __name__, url_prefix='/')
+CORS(bp)
 
 def token_required(f): 
         @wraps(f)
@@ -122,9 +123,13 @@ def add_todo(current_user):
         conn.close()
         
         output = {"message": "the task has been added"} 
-        return jsonify(output)
+        
+        output = jsonify(output)
+        output.headers.add("Access-Control-Allow-Origin", "*")
+        return output
         
 @bp.route('/login')
+
 def login():
         auth = request.authorization
         
@@ -141,7 +146,7 @@ def login():
         if not user:
                 return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm = "Login required"'})
         if check_password_hash(user[3],auth.password):
-                token = jwt.encode({'public id' : user[1], 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes = 30)}, current_app.config['SECRET_KEY'])
+                token = jwt.encode({'public id' : user[1], 'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours = 24)}, current_app.config['SECRET_KEY'])
                 return jsonify({"token" : token})
                 
         return make_response('Could not verify! username and password not matching', 401, {'WWW-Authenticate' : 'Basic realm = "Login required"'})
