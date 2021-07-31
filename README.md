@@ -8,3 +8,5 @@ This is a todo application api made by Benito Ullas as part of the genskill proj
 3. `export FLASK_APP=todoapp`
 4. `flask initdb`
 5. `flask run`
+
+To go to the frontend application, click [here](https://github.com/benito-ullas/genskill_todoapp_front1)
